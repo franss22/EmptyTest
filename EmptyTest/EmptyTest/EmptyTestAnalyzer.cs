@@ -33,52 +33,52 @@ namespace EmptyTest
         {
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
             context.EnableConcurrentExecution();
-            context.RegisterSymbolStartAction(FindTestingClass, SymbolKind.NamedType);
+            context.RegisterCompilationStartAction(FindTestingClass);
         }
 
-        private static void FindTestingClass(SymbolStartAnalysisContext context)
+        private static void FindTestingClass(CompilationStartAnalysisContext context)
         {
-            var namedTypeSymbol = (INamedTypeSymbol)context.Symbol;
+            var testMethodAttr = context.Compilation.GetTypeByMetadataName("Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute");
+            var testClassAttr = context.Compilation.GetTypeByMetadataName("Microsoft.VisualStudio.TestTools.UnitTesting.TestClassAttribute");
 
-            var classAttributes = namedTypeSymbol.GetAttributes();
-            var isTestClass = false;
-            foreach (var item in classAttributes)
+            if (testMethodAttr is null) { return; }
+
+            context.RegisterSymbolStartAction((ctx) =>
             {
-                if (item.AttributeClass.Name.Equals("TestClassAttribute"))
+                var methodSymbol = (IMethodSymbol)ctx.Symbol;
+                foreach (var attr in methodSymbol.GetAttributes())
                 {
-                    isTestClass = true; break;
-                }
-            }
-            if (!isTestClass) { return; }
-            foreach (var item in namedTypeSymbol.GetMembers())
-            {
-                if (item.Kind != SymbolKind.Method) { continue; }
-                var methodSymbol = (IMethodSymbol)item;
-                var attributes = methodSymbol.GetAttributes();
-                foreach (var attr in attributes)
-                {
-                    if (attr.AttributeClass.Name.Equals("TestMethodAttribute"))
+                    if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, testMethodAttr))
                     {
-                        context.RegisterSyntaxNodeAction(AnalyzeMethodSyntax, SyntaxKind.MethodDeclaration); break;
+                        //throw new Exception($"Is a Test Method");
+
+                        context.RegisterOperationBlockAction(AnalyzeMethodBlockIOperation);
+                        break;
                     }
                 }
-
             }
-
+            , SymbolKind.Method);
         }
 
-        private static void AnalyzeMethodSyntax(SyntaxNodeAnalysisContext context)
+        private static void AnalyzeMethodBlockIOperation(OperationBlockAnalysisContext context)
         {
-            var methodDeclaration = (MethodDeclarationSyntax)context.Node;
-            var body = methodDeclaration.Body;
+            //throw new Exception("a");
 
-            if (body.Statements.Count == 0)
+            foreach (var block in context.OperationBlocks)
             {
-                var diagnostic = Diagnostic.Create(Rule, methodDeclaration.Identifier.GetLocation(), methodDeclaration.Identifier.ToString());
-                context.ReportDiagnostic(diagnostic);
+                //throw new Exception(block.Kind.ToString());
+                if (block.Kind != OperationKind.MethodBody) { continue; }
+                if (block.Descendants().Count() == 0)
+                {
+                    var methodBlock = (IMethodBodyOperation)block;
+                    var methodSyntax = (MethodDeclarationSyntax) methodBlock.Syntax;
+                    var diagnostic = Diagnostic.Create(Rule, methodSyntax.Identifier.GetLocation(), methodSyntax.Identifier.ToString());
+                    context.ReportDiagnostic(diagnostic);
+                }
+            
             }
 
-
         }
+
     }
 }
