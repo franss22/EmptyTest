@@ -45,14 +45,27 @@ namespace EmptyTest
 
             context.RegisterSymbolStartAction((ctx) =>
             {
+
                 var methodSymbol = (IMethodSymbol)ctx.Symbol;
+
+                var container = methodSymbol.ContainingSymbol;
+                if (container is null) { return; }
+                var isTestClass = false;
+                foreach (var attr in container.GetAttributes())
+                {
+                    if (attr.AttributeClass.Name.Equals("TestClassAttribute"))
+                    {
+                        isTestClass = true; break;
+                    }
+                }
+                if (!isTestClass) { return; }
+
+
                 foreach (var attr in methodSymbol.GetAttributes())
                 {
                     if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, testMethodAttr))
                     {
-                        //throw new Exception($"Is a Test Method");
-
-                        context.RegisterOperationBlockAction(AnalyzeMethodBlockIOperation);
+                        ctx.RegisterOperationBlockAction(AnalyzeMethodBlockIOperation);
                         break;
                     }
                 }
@@ -62,20 +75,19 @@ namespace EmptyTest
 
         private static void AnalyzeMethodBlockIOperation(OperationBlockAnalysisContext context)
         {
-            //throw new Exception("a");
 
             foreach (var block in context.OperationBlocks)
             {
                 //throw new Exception(block.Kind.ToString());
-                if (block.Kind != OperationKind.MethodBody) { continue; }
+                if (block.Kind != OperationKind.Block) { continue; }
                 if (block.Descendants().Count() == 0)
                 {
-                    var methodBlock = (IMethodBodyOperation)block;
-                    var methodSyntax = (MethodDeclarationSyntax) methodBlock.Syntax;
+                    var methodBlock = (IMethodBodyOperation)block.Parent;
+                    var methodSyntax = (MethodDeclarationSyntax)methodBlock.Syntax;
                     var diagnostic = Diagnostic.Create(Rule, methodSyntax.Identifier.GetLocation(), methodSyntax.Identifier.ToString());
                     context.ReportDiagnostic(diagnostic);
                 }
-            
+
             }
 
         }
