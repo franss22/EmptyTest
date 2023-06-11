@@ -48,6 +48,8 @@ namespace EmptyTest
 
                 var methodSymbol = (IMethodSymbol)ctx.Symbol;
 
+
+                //Check if the container class is [TestClass]
                 var container = methodSymbol.ContainingSymbol;
                 if (container is null) { return; }
                 var isTestClass = false;
@@ -60,7 +62,7 @@ namespace EmptyTest
                 }
                 if (!isTestClass) { return; }
 
-
+                //Check if method is [TestMethod]
                 foreach (var attr in methodSymbol.GetAttributes())
                 {
                     if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, testMethodAttr))
@@ -78,7 +80,6 @@ namespace EmptyTest
 
             foreach (var block in context.OperationBlocks)
             {
-                //throw new Exception(block.Kind.ToString());
                 if (block.Kind != OperationKind.Block) { continue; }
                 if (block.Descendants().Count() == 0)
                 {
