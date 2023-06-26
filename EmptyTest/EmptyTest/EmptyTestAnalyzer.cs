@@ -18,12 +18,11 @@ namespace EmptyTest
     {
         public const string DiagnosticId = "EmptyTest";
 
-        // You can change these strings in the Resources.resx file. If you do not want your analyzer to be localize-able, you can use regular strings for Title and MessageFormat.
-        // See https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Localizing%20Analyzers.md for more on localization
+        //Defining localized names and info for the diagnostic
         private static readonly LocalizableString Title = new LocalizableResourceString(nameof(Resources.AnalyzerTitle), Resources.ResourceManager, typeof(Resources));
         private static readonly LocalizableString MessageFormat = new LocalizableResourceString(nameof(Resources.AnalyzerMessageFormat), Resources.ResourceManager, typeof(Resources));
         private static readonly LocalizableString Description = new LocalizableResourceString(nameof(Resources.AnalyzerDescription), Resources.ResourceManager, typeof(Resources));
-        private const string Category = "Naming";
+        private const string Category = "Test Smells";
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(DiagnosticId, Title, MessageFormat, Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, description: Description);
 
@@ -31,21 +30,29 @@ namespace EmptyTest
 
         public override void Initialize(AnalysisContext context)
         {
+            // Controls analysis of generated code (ex. EntityFramework Migration) None means generated code is not analyzed
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+
             context.EnableConcurrentExecution();
+
+            //Registers callback to start analysis
             context.RegisterCompilationStartAction(FindTestingClass);
         }
 
         private static void FindTestingClass(CompilationStartAnalysisContext context)
         {
-            var testMethodAttr = context.Compilation.GetTypeByMetadataName("Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute");
-            var testClassAttr = context.Compilation.GetTypeByMetadataName("Microsoft.VisualStudio.TestTools.UnitTesting.TestClassAttribute");
 
+            // Get the attribute object from the compilation
+            var testClassAttr = context.Compilation.GetTypeByMetadataName("Microsoft.VisualStudio.TestTools.UnitTesting.TestClassAttribute");
+            if (testClassAttr is null) { return; }
+            var testMethodAttr = context.Compilation.GetTypeByMetadataName("Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute");
             if (testMethodAttr is null) { return; }
 
+            
+
+            // We register a Symbol Start Action to filter all test classes and their test methods
             context.RegisterSymbolStartAction((ctx) =>
             {
-
                 var methodSymbol = (IMethodSymbol)ctx.Symbol;
 
 
@@ -67,6 +74,7 @@ namespace EmptyTest
                 {
                     if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, testMethodAttr))
                     {
+                        // If it's a test method in a test class, we check it internally to see if it has no statements
                         ctx.RegisterOperationBlockAction(AnalyzeMethodBlockIOperation);
                         break;
                     }
@@ -78,10 +86,10 @@ namespace EmptyTest
         private static void AnalyzeMethodBlockIOperation(OperationBlockAnalysisContext context)
         {
 
-            foreach (var block in context.OperationBlocks)
+            foreach (var block in context.OperationBlocks)//we look for the method body
             {
                 if (block.Kind != OperationKind.Block) { continue; }
-                if (block.Descendants().Count() == 0)
+                if (block.Descendants().Count() == 0)//if the method body has no operations, it is empty
                 {
                     var methodBlock = (IMethodBodyOperation)block.Parent;
                     var methodSyntax = (MethodDeclarationSyntax)methodBlock.Syntax;
