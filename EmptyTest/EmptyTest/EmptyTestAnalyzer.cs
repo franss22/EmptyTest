@@ -62,7 +62,7 @@ namespace EmptyTest
                 var isTestClass = false;
                 foreach (var attr in container.GetAttributes())
                 {
-                    if (attr.AttributeClass.Name.Equals("TestClassAttribute"))
+                    if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, testClassAttr))
                     {
                         isTestClass = true; break;
                     }
