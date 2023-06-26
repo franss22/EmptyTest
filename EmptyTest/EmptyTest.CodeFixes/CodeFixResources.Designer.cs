@@ -61,7 +61,7 @@ namespace EmptyTest {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Make uppercase.
+        ///   Looks up a localized string similar to Fix Empty Test.
         /// </summary>
         internal static string CodeFixTitle {
             get {

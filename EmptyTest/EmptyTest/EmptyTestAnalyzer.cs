@@ -18,8 +18,7 @@ namespace EmptyTest
     {
         public const string DiagnosticId = "EmptyTest";
 
-        // You can change these strings in the Resources.resx file. If you do not want your analyzer to be localize-able, you can use regular strings for Title and MessageFormat.
-        // See https://github.com/dotnet/roslyn/blob/main/docs/analyzers/Localizing%20Analyzers.md for more on localization
+        //Defining localized names and info for the diagnostic
         private static readonly LocalizableString Title = new LocalizableResourceString(nameof(Resources.AnalyzerTitle), Resources.ResourceManager, typeof(Resources));
         private static readonly LocalizableString MessageFormat = new LocalizableResourceString(nameof(Resources.AnalyzerMessageFormat), Resources.ResourceManager, typeof(Resources));
         private static readonly LocalizableString Description = new LocalizableResourceString(nameof(Resources.AnalyzerDescription), Resources.ResourceManager, typeof(Resources));
@@ -31,54 +30,76 @@ namespace EmptyTest
 
         public override void Initialize(AnalysisContext context)
         {
+            // Controls analysis of generated code (ex. EntityFramework Migration) None means generated code is not analyzed
             context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+
             context.EnableConcurrentExecution();
-            context.RegisterSymbolStartAction(FindTestingClass, SymbolKind.NamedType);
+
+            //Registers callback to start analysis
+            context.RegisterCompilationStartAction(FindTestingClass);
         }
 
-        private static void FindTestingClass(SymbolStartAnalysisContext context)
+        private static void FindTestingClass(CompilationStartAnalysisContext context)
         {
-            var namedTypeSymbol = (INamedTypeSymbol)context.Symbol;
 
-            var classAttributes = namedTypeSymbol.GetAttributes();
-            var isTestClass = false;
-            foreach (var item in classAttributes)
+            // Get the attribute object from the compilation
+            var testClassAttr = context.Compilation.GetTypeByMetadataName("Microsoft.VisualStudio.TestTools.UnitTesting.TestClassAttribute");
+            if (testClassAttr is null) { return; }
+            var testMethodAttr = context.Compilation.GetTypeByMetadataName("Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute");
+            if (testMethodAttr is null) { return; }
+
+            
+
+            // We register a Symbol Start Action to filter all test classes and their test methods
+            context.RegisterSymbolStartAction((ctx) =>
             {
-                if (item.AttributeClass.Name.Equals("TestClassAttribute"))
+                var methodSymbol = (IMethodSymbol)ctx.Symbol;
+
+
+                //Check if the container class is [TestClass]
+                var container = methodSymbol.ContainingSymbol;
+                if (container is null) { return; }
+                var isTestClass = false;
+                foreach (var attr in container.GetAttributes())
                 {
-                    isTestClass = true; break;
-                }
-            }
-            if (!isTestClass) { return; }
-            foreach (var item in namedTypeSymbol.GetMembers())
-            {
-                if (item.Kind != SymbolKind.Method) { continue; }
-                var methodSymbol = (IMethodSymbol)item;
-                var attributes = methodSymbol.GetAttributes();
-                foreach (var attr in attributes)
-                {
-                    if (attr.AttributeClass.Name.Equals("TestMethodAttribute"))
+                    if (attr.AttributeClass.Name.Equals("TestClassAttribute"))
                     {
-                        context.RegisterSyntaxNodeAction(AnalyzeMethodSyntax, SyntaxKind.MethodDeclaration); break;
+                        isTestClass = true; break;
                     }
                 }
+                if (!isTestClass) { return; }
 
+                //Check if method is [TestMethod]
+                foreach (var attr in methodSymbol.GetAttributes())
+                {
+                    if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, testMethodAttr))
+                    {
+                        // If it's a test method in a test class, we check it internally to see if it has no statements
+                        ctx.RegisterOperationBlockAction(AnalyzeMethodBlockIOperation);
+                        break;
+                    }
+                }
             }
-
+            , SymbolKind.Method);
         }
 
-        private static void AnalyzeMethodSyntax(SyntaxNodeAnalysisContext context)
+        private static void AnalyzeMethodBlockIOperation(OperationBlockAnalysisContext context)
         {
-            var methodDeclaration = (MethodDeclarationSyntax)context.Node;
-            var body = methodDeclaration.Body;
 
-            if (body.Statements.Count == 0)
+            foreach (var block in context.OperationBlocks)//we look for the method body
             {
-                var diagnostic = Diagnostic.Create(Rule, methodDeclaration.Identifier.GetLocation(), methodDeclaration.Identifier.ToString());
-                context.ReportDiagnostic(diagnostic);
+                if (block.Kind != OperationKind.Block) { continue; }
+                if (block.Descendants().Count() == 0)//if the method body has no operations, it is empty
+                {
+                    var methodBlock = (IMethodBodyOperation)block.Parent;
+                    var methodSyntax = (MethodDeclarationSyntax)methodBlock.Syntax;
+                    var diagnostic = Diagnostic.Create(Rule, methodSyntax.Identifier.GetLocation(), methodSyntax.Identifier.ToString());
+                    context.ReportDiagnostic(diagnostic);
+                }
+
             }
 
-
         }
+
     }
 }
