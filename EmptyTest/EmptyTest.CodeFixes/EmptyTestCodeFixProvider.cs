@@ -69,12 +69,12 @@ namespace EmptyTest
 
             var generator = SyntaxGenerator.GetGenerator(document);
 
-            //var trivia = bodyBlockSyntax.DescendantTrivia().ToList();
+            var trivia = bodyBlockSyntax.DescendantTrivia().ToList();
             
 
 
             var throwStatement = (StatementSyntax) generator.ThrowStatement(generator.ObjectCreationExpression(
-                generator.TypeExpression(notImplementedExceptionType))).NormalizeWhitespace().WithAdditionalAnnotations(Simplifier.AddImportsAnnotation);
+                generator.TypeExpression(notImplementedExceptionType))).WithLeadingTrivia(trivia).NormalizeWhitespace().WithAdditionalAnnotations(Simplifier.AddImportsAnnotation);
 
 
             var newBlockStatements = bodyStatements.Insert(0, throwStatement);
