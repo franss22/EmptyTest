@@ -48,7 +48,7 @@ namespace EmptyTest
             var testMethodAttr = context.Compilation.GetTypeByMetadataName("Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute");
             if (testMethodAttr is null) { return; }
 
-            
+
 
             // We register a Symbol Start Action to filter all test classes and their test methods
             context.RegisterSymbolStartAction((ctx) =>
