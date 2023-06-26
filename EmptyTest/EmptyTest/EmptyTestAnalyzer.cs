@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.Operations;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices.ComTypes;
@@ -56,29 +57,14 @@ namespace EmptyTest
                 var methodSymbol = (IMethodSymbol)ctx.Symbol;
 
 
-                //Check if the container class is [TestClass]
-                var container = methodSymbol.ContainingSymbol;
-                if (container is null) { return; }
-                var isTestClass = false;
-                foreach (var attr in container.GetAttributes())
-                {
-                    if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, testClassAttr))
-                    {
-                        isTestClass = true; break;
-                    }
-                }
-                if (!isTestClass) { return; }
+                //Check if the container class is [TestClass], skip if it's not
+                var containerClass = methodSymbol.ContainingSymbol;
+                if (containerClass is null) { return; }
+                if (!FindAttributeInSymbol(testClassAttr, containerClass)) { return; }
 
-                //Check if method is [TestMethod]
-                foreach (var attr in methodSymbol.GetAttributes())
-                {
-                    if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, testMethodAttr))
-                    {
-                        // If it's a test method in a test class, we check it internally to see if it has no statements
-                        ctx.RegisterOperationBlockAction(AnalyzeMethodBlockIOperation);
-                        break;
-                    }
-                }
+                //Check if method is [TestMethod], register mthod analysis if it is
+                if (FindAttributeInSymbol(testMethodAttr, methodSymbol)) { ctx.RegisterOperationBlockAction(AnalyzeMethodBlockIOperation); }
+
             }
             , SymbolKind.Method);
         }
@@ -91,14 +77,25 @@ namespace EmptyTest
                 if (block.Kind != OperationKind.Block) { continue; }
                 if (block.Descendants().Count() == 0)//if the method body has no operations, it is empty
                 {
-                    var methodBlock = (IMethodBodyOperation)block.Parent;
-                    var methodSyntax = (MethodDeclarationSyntax)methodBlock.Syntax;
-                    var diagnostic = Diagnostic.Create(Rule, methodSyntax.Identifier.GetLocation(), methodSyntax.Identifier.ToString());
+                    var methodSymbol = context.OwningSymbol;
+                    var diagnostic = Diagnostic.Create(Rule, methodSymbol.Locations.First(), methodSymbol.Name);
                     context.ReportDiagnostic(diagnostic);
                 }
 
             }
 
+        }
+
+        private static bool FindAttributeInSymbol(INamedTypeSymbol attribute, ISymbol symbol)
+        {
+            foreach (var attr in symbol.GetAttributes())
+            {
+                if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, attribute))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
     }
