@@ -21,7 +21,7 @@ namespace EmptyTest.Test
 
         private readonly ReferenceAssemblies UnitTestingAssembly = ReferenceAssemblies.NetFramework.Net48.Default.AddPackages(ImmutableArray.Create(new PackageIdentity("Microsoft.VisualStudio.UnitTesting", "11.0.50727.1"))).AddAssemblies(ImmutableArray.Create("Microsoft.VisualStudio.UnitTesting"));
 
-        private TestReader testReader = new TestReader();
+        private readonly TestReader testReader = new TestReader();
         //No diagnostics expected to show up
         [TestMethod]
         public async Task EmptyProgram()
@@ -35,7 +35,7 @@ namespace EmptyTest.Test
         public async Task EmptyTestReported()
         {
             var testFile = @"Corpus\Emptytest.cs";
-            var expected = VerifyCS.Diagnostic("EmptyTest").WithSpan(9, 21, 9, 32).WithArguments("TestMethod1"); ;
+            var expected = VerifyCS.Diagnostic("EmptyTest").WithSpan(9, 21, 9, 32).WithArguments("TestMethod1");
             await new VerifyCS.Test
             {
                 TestCode = testReader.ReadTest(testFile),
@@ -44,12 +44,12 @@ namespace EmptyTest.Test
             }.RunAsync();
         }
 
-        //Diagnostic and CodeFix both triggered and checked for
+        
         [TestMethod]
         public async Task EmptyTestWithCommentReported()
         {
             var testFile = @"Corpus\EmptyTestWithComments.cs";
-            var expected = VerifyCS.Diagnostic("EmptyTest").WithSpan(9, 21, 9, 32).WithArguments("TestMethod1"); ;
+            var expected = VerifyCS.Diagnostic("EmptyTest").WithSpan(9, 21, 9, 32).WithArguments("TestMethod1");
             await new VerifyCS.Test
             {
                 TestCode = testReader.ReadTest(testFile),
@@ -95,6 +95,37 @@ namespace EmptyTest.Test
             }.RunAsync();
         }
 
+        [TestMethod]
+        public async Task EmptyTestFixed()
+        {
+            var testFile = @"Corpus\Emptytest.cs";
+            var fixedFile = @"Corpus\EmptytestFixed.cs";
+
+            var expected = VerifyCS.Diagnostic("EmptyTest").WithSpan(9, 21, 9, 32).WithArguments("TestMethod1");
+            await new VerifyCS.Test
+            {
+                TestCode = testReader.ReadTest(testFile),
+                FixedCode = testReader.ReadTest(fixedFile),
+                ExpectedDiagnostics = { expected },
+                ReferenceAssemblies = UnitTestingAssembly
+            }.RunAsync();
+        }
+
+        [TestMethod]
+        public async Task EmptyTestWithCommentFixed()
+        {
+            var testFile = @"Corpus\EmptyTestWithComments.cs";
+            var fixedFile = @"Corpus\EmptyTestWithCommentsFixed.cs";
+
+            var expected = VerifyCS.Diagnostic("EmptyTest").WithSpan(9, 21, 9, 32).WithArguments("TestMethod1");
+            await new VerifyCS.Test
+            {
+                TestCode = testReader.ReadTest(testFile),
+                FixedCode = testReader.ReadTest(fixedFile),
+                ExpectedDiagnostics = { expected },
+                ReferenceAssemblies = UnitTestingAssembly
+            }.RunAsync();
+        }
 
     }
 }

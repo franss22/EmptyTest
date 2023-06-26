@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Editing;
+using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Rename;
 using Microsoft.CodeAnalysis.Simplification;
 using Microsoft.CodeAnalysis.Text;
@@ -14,6 +15,7 @@ using System.Composition;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace EmptyTest
 {
@@ -37,11 +39,10 @@ namespace EmptyTest
         {
             var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
 
-            // TODO: Replace the following code with your own analysis, generating a CodeAction for each fix to suggest
             var diagnostic = context.Diagnostics.First();
             var diagnosticSpan = diagnostic.Location.SourceSpan;
 
-            // Find the type declaration identified by the diagnostic.
+            // Find the method declaration identified by the diagnostic.
             var methodDeclaration = root.FindToken(diagnosticSpan.Start).Parent.AncestorsAndSelf().OfType<MethodDeclarationSyntax>().First();
 
             // Register a code action that will invoke the fix.
@@ -56,34 +57,36 @@ namespace EmptyTest
         private async Task<Document> AddNotImplementedException(Document document, MethodDeclarationSyntax methodDeclaration, CancellationToken cancellationToken)
         {
 
-            // Compute new uppercase name.
-            var bodyBlockSyntax = methodDeclaration.Body;
-            var bodyStatements = bodyBlockSyntax.Statements;
-            //var newBlock = bodyStatements.Insert(0, );
 
-            // Get the symbol representing the type to be renamed.
+            //NotImplementedException class
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            //var typeSymbol = semanticModel.GetDeclaredSymbol(methodDeclaration, cancellationToken);
-
             var notImplementedExceptionType = semanticModel.Compilation.GetTypeByMetadataName(SystemNotImplementedExceptionTypeName);
 
-            var generator = SyntaxGenerator.GetGenerator(document);
-
-            var trivia = bodyBlockSyntax.DescendantTrivia().ToList();
+            //creating the new body with the added "raise new NotImplementedException();" at the end.
+            //Method statements
+            var bodyBlockSyntax = methodDeclaration.Body;
+            var bodyStatements = bodyBlockSyntax.Statements;
+            var endBrace = bodyBlockSyntax.CloseBraceToken;
+   
+            //We generate "raise new NotImplementedException();"
             
+            var generator = SyntaxGenerator.GetGenerator(document);
+            
+            var throwStatement = (StatementSyntax)generator.ThrowStatement(generator.ObjectCreationExpression(
+                generator.TypeExpression(notImplementedExceptionType))).WithLeadingTrivia(endBrace.LeadingTrivia).WithAdditionalAnnotations(Simplifier.AddImportsAnnotation, Formatter.Annotation);
 
-
-            var throwStatement = (StatementSyntax) generator.ThrowStatement(generator.ObjectCreationExpression(
-                generator.TypeExpression(notImplementedExceptionType))).WithLeadingTrivia(trivia).NormalizeWhitespace().WithAdditionalAnnotations(Simplifier.AddImportsAnnotation);
-
-
+            //We add to the start of the statement block
             var newBlockStatements = bodyStatements.Insert(0, throwStatement);
+            var newBodyBlockSyntax = bodyBlockSyntax.WithCloseBraceToken(endBrace.WithLeadingTrivia()).WithStatements(newBlockStatements);
 
+
+
+            //Editing the document
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            var newBodyBlockSyntax = bodyBlockSyntax.AddStatements(throwStatement).NormalizeWhitespace();
+            //var newroot = root.ReplaceTokens(bodyBlockSyntax.Statements, newBlockStatements);
+            //var newDocument = document.WithSyntaxRoot(newroot);
             var newDocument = document.WithSyntaxRoot(root.ReplaceNode(bodyBlockSyntax, newBodyBlockSyntax));
 
-            // Return the new solution with the now-uppercase type name.
             return newDocument;
         }
     }
